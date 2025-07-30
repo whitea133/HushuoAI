@@ -10,11 +10,11 @@ print(messages_record)
 
 # print(textFn("你上一句说了什么？", messages=messages_record))
 
-# print(textFn("你还记得你是什么专家吗", messages=messages_record))
+print(textFn("你还记得你是什么专家吗", messages=messages_record))
 # b = imageFn('./xiaohuolong.jpg', "这是什么动漫的图片", messages=messages_record)
 # print(b)
 
 # c = videoFn('./vid.MP4', "这段视频的人在干什么？并且回答你是谁", messages=messages_record)
 # print(c)
 
-generate_image("生成一张小猫的图片", "256x256", messages=messages_record)
+# generate_image("生成一张小猫的图片", "256x256", messages=messages_record)

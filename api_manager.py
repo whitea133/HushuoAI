@@ -18,7 +18,7 @@ def textFn(text: str, messages: list = []) -> str:
     messages.append({"role": "assistant", "content": resp.choices[0].message.content})
     return resp.choices[0].message.content
 
-# 图片功能
+# 单图片功能
 def imageFn(image_path: str, prompt: str = "描述这张图片", messages: list = []) -> str:
     b64 = image_to_base64(image_path)
     append_text = {
@@ -30,6 +30,26 @@ def imageFn(image_path: str, prompt: str = "描述这张图片", messages: list 
         "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"}
     }
     messages.append({"role": "user", "content": [append_text, append_img]})
+    resp = _client.chat.completions.create(model=cfg.MODEL_ID, messages=messages)
+    messages.append({"role": "assistant", "content": resp.choices[0].message.content})
+    return resp.choices[0].message.content
+
+# 多图片功能
+def images_batchFn(image_paths: List[str],
+                   prompt: str = "请根据下面文字和图片回答",
+                   messages: list = []) -> str:
+    """
+    一次把多张图片 + 一段文字打包发给模型
+    """
+    content = [{"type": "text", "text": prompt}]
+    for p in image_paths:
+        b64 = image_to_base64(p)
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"}
+        })
+
+    messages.append({"role": "user", "content": content})
     resp = _client.chat.completions.create(model=cfg.MODEL_ID, messages=messages)
     messages.append({"role": "assistant", "content": resp.choices[0].message.content})
     return resp.choices[0].message.content
