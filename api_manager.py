@@ -1,5 +1,7 @@
 import base64
 import os
+import shutil
+import tempfile
 from typing import List, Literal, Optional
 from volcenginesdkarkruntime import Ark
 from utils.image_utils import image_to_base64
@@ -54,7 +56,7 @@ def images_batchFn(image_paths: List[str],
     messages.append({"role": "assistant", "content": resp.choices[0].message.content})
     return resp.choices[0].message.content
 
-# 视频功能
+# 单视频功能
 def videoFn(video_path: str, prompt: str = "描述这段视频", messages: list = []) -> str:
     # messages.append({"role": "user", "content": prompt})
     content = [
@@ -77,9 +79,85 @@ def videoFn(video_path: str, prompt: str = "描述这段视频", messages: list 
         messages.append({"role": "assistant", "content": resp.choices[0].message.content})
         return resp.choices[0].message.content
     finally:
-        import shutil
         shutil.rmtree(".tmp", ignore_errors=True)
-        
+
+# 多视频统一描述
+def video_batchFn(video_paths: List[str],
+                  prompt: str = "请根据下面文字和多个视频内容回答",
+                  max_frames_per_video: int = 5,
+                  messages: list = []) -> str:
+    """
+    一次性把多个视频的所有关键帧 + 文字打包发送
+    """
+    content = [{"type": "text", "text": prompt}]
+    temp_dirs = []
+
+    try:
+        for vpath in video_paths:
+            # 每个视频独立目录，避免文件名冲突
+            tmp = tempfile.mkdtemp(prefix="video_frames_")
+            temp_dirs.append(tmp)
+
+            frames = extract_keyframes(
+                vpath,
+                output_dir=tmp,
+                max_frames=max_frames_per_video
+            )
+            for frame in frames:
+                b64 = image_to_base64(frame)
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"}
+                })
+
+        messages.append({"role": "user", "content": content})
+        resp = _client.chat.completions.create(model=cfg.MODEL_ID, messages=messages)
+        messages.append({"role": "assistant", "content": resp.choices[0].message.content})
+        return resp.choices[0].message.content
+
+    finally:
+        # 清理所有临时目录
+        for td in temp_dirs:
+            shutil.rmtree(td, ignore_errors=True)
+
+# ---------- 统一多模态接口 ----------
+def multimodal(text: str, imgs: List[str], videos: List[str], messages: list) -> str:
+    """
+    把文字 + 所有图片 + 所有视频关键帧一次性打包
+    """
+    content = [{"type": "text", "text": text}]
+    temp_dirs = []
+
+    try:
+        # 1. 图片直接转
+        for img in imgs:
+            b64 = image_to_base64(img)
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"}
+            })
+
+        # 2. 视频抽帧
+        for vid in videos:
+            tmp = tempfile.mkdtemp(prefix="vframes_")
+            temp_dirs.append(tmp)
+            frames = extract_keyframes(vid, output_dir=tmp, max_frames=5)
+            for f in frames:
+                b64 = image_to_base64(f)
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"}
+                })
+
+        messages.append({"role": "user", "content": content})
+        resp = _client.chat.completions.create(model=cfg.MODEL_ID, messages=messages)
+        messages.append({"role": "assistant", "content": resp.choices[0].message.content})
+        return resp.choices[0].message.content
+
+    finally:
+        for td in temp_dirs:
+            shutil.rmtree(td, ignore_errors=True)
+
 def generate_image(prompt: str, size: str = "1024x1024", messages: list = []) -> str:
     messages.append({"role": "user", "content": prompt})
     payload = {
